@@ -1,0 +1,295 @@
+# kube-prometheus-stack Helm values
+# Apply: helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#          -n monitoring --create-namespace -f helm/values-prometheus.yaml
+
+# ── Grafana ───────────────────────────────────────────────────────────────────
+grafana:
+  enabled: true
+  adminPassword: "guardian-admin"   # change before real use
+
+  persistence:
+    enabled: true
+    storageClassName: standard
+    size: 5Gi
+
+  # Sidecar loads all ConfigMaps labelled grafana_dashboard=1 as dashboards
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: "guardian"
+
+  grafana.ini:
+    server:
+      root_url: "http://localhost:3000"
+    analytics:
+      check_for_updates: false
+
+  # Pre-loaded dashboards via inline JSON
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: guardian
+          orgId: 1
+          folder: "Guardian"
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/guardian
+
+  dashboards:
+    guardian:
+      guardian-overview:
+        json: >
+          {
+            "title": "Guardian Cluster — PM2.5 Bangkok",
+            "uid": "guardian-aqi",
+            "timezone": "Asia/Bangkok",
+            "refresh": "15s",
+            "schemaVersion": 36,
+            "tags": ["guardian", "aqi"],
+            "time": {"from": "now-1h", "to": "now"},
+            "panels": [
+              {
+                "id": 1,
+                "type": "stat",
+                "title": "Pod Health — Ready Replicas",
+                "datasource": {"type": "prometheus"},
+                "targets": [{
+                  "expr": "kube_deployment_status_replicas_ready{namespace=\"guardian\"}",
+                  "legendFormat": "{{deployment}}",
+                  "refId": "A"
+                }],
+                "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0},
+                "options": {
+                  "reduceOptions": {"calcs": ["lastNotNull"]},
+                  "colorMode": "background",
+                  "graphMode": "none",
+                  "orientation": "horizontal"
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {"mode": "thresholds"},
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [
+                        {"color": "red",    "value": 0},
+                        {"color": "yellow", "value": 2},
+                        {"color": "green",  "value": 3}
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "id": 2,
+                "type": "timeseries",
+                "title": "HTTP Request Rate (req/s)",
+                "datasource": {"type": "prometheus"},
+                "targets": [{
+                  "expr": "sum(rate(http_requests_total{namespace=\"guardian\"}[1m])) by (endpoint, status)",
+                  "legendFormat": "{{endpoint}} [{{status}}]",
+                  "refId": "A"
+                }],
+                "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+                "fieldConfig": {"defaults": {"unit": "reqps"}},
+                "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}}
+              },
+              {
+                "id": 3,
+                "type": "timeseries",
+                "title": "Memory Usage (% of limit)",
+                "datasource": {"type": "prometheus"},
+                "targets": [{
+                  "expr": "container_memory_usage_bytes{namespace=\"guardian\",container!=\"\"} / container_spec_memory_limit_bytes{namespace=\"guardian\",container!=\"\"}",
+                  "legendFormat": "{{pod}} / {{container}}",
+                  "refId": "A"
+                }],
+                "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+                "fieldConfig": {
+                  "defaults": {
+                    "unit": "percentunit",
+                    "min": 0, "max": 1,
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [
+                        {"color": "green",  "value": 0},
+                        {"color": "yellow", "value": 0.7},
+                        {"color": "red",    "value": 0.85}
+                      ]
+                    },
+                    "custom": {"thresholdsStyle": {"mode": "line"}}
+                  }
+                },
+                "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}}
+              },
+              {
+                "id": 4,
+                "type": "timeseries",
+                "title": "PM2.5 Ingest Rate & Staleness",
+                "datasource": {"type": "prometheus"},
+                "targets": [
+                  {
+                    "expr": "rate(ingest_requests_total{status=\"success\"}[1m])",
+                    "legendFormat": "Ingest rate (req/s)",
+                    "refId": "A"
+                  },
+                  {
+                    "expr": "time() - aqi_last_ingest_timestamp",
+                    "legendFormat": "Seconds since last ingest",
+                    "refId": "B"
+                  }
+                ],
+                "gridPos": {"h": 8, "w": 24, "x": 0, "y": 14},
+                "fieldConfig": {"defaults": {"unit": "short"}},
+                "options": {"tooltip": {"mode": "multi"}, "legend": {"displayMode": "list", "placement": "bottom"}}
+              }
+            ]
+          }
+
+# ── Prometheus ────────────────────────────────────────────────────────────────
+prometheus:
+  prometheusSpec:
+    retention: 30d
+    retentionSize: "18GB"
+
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+    # Allow PrometheusRule / ServiceMonitor resources from any namespace
+    ruleSelectorNilUsesHelmValues:          false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues:     false
+
+    additionalScrapeConfigs:
+      - job_name: guardian-pods
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["guardian"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+
+# ── Alertmanager ──────────────────────────────────────────────────────────────
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+
+  config:
+    global:
+      resolve_timeout: 5m
+
+    route:
+      group_by: ["alertname", "severity", "namespace"]
+      group_wait:      30s
+      group_interval:  5m
+      repeat_interval: 12h
+      receiver: discord-default
+      routes:
+        - matchers:
+            - severity = critical
+          receiver: discord-critical
+          repeat_interval: 15m
+          continue: false
+        - matchers:
+            - severity = warning
+          receiver: discord-warning
+          repeat_interval: 1h
+          continue: false
+
+    receivers:
+      - name: discord-default
+        slack_configs:
+          - api_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL/slack"
+            channel: "#guardian-alerts"
+            username: "Guardian Bot"
+            icon_emoji: ":shield:"
+            title: 'Guardian: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Pod:* {{ .Labels.pod | default "N/A" }}
+              *Severity:* {{ .Labels.severity }}
+              *Summary:* {{ .Annotations.summary }}
+              {{ end }}
+
+      - name: discord-critical
+        slack_configs:
+          - api_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL/slack"
+            channel: "#guardian-alerts"
+            username: "Guardian Bot"
+            icon_emoji: ":red_circle:"
+            color: "#FF0000"
+            title: ':red_circle: CRITICAL — {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Pod:* {{ .Labels.pod | default "N/A" }}
+              *Namespace:* {{ .Labels.namespace }}
+              *Summary:* {{ .Annotations.summary }}
+              *Detail:* {{ .Annotations.description }}
+              {{ end }}
+            send_resolved: true
+
+      - name: discord-warning
+        slack_configs:
+          - api_url: "REPLACE_WITH_DISCORD_WEBHOOK_URL/slack"
+            channel: "#guardian-alerts"
+            username: "Guardian Bot"
+            icon_emoji: ":warning:"
+            color: "#FFA500"
+            title: ':warning: WARNING — {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Pod:* {{ .Labels.pod | default "N/A" }}
+              *Summary:* {{ .Annotations.summary }}
+              {{ end }}
+            send_resolved: true
+
+    inhibit_rules:
+      - source_matchers:
+          - severity = critical
+        target_matchers:
+          - severity = warning
+        equal:
+          - alertname
+          - namespace
+
+# ── Disable components not needed for local demo ──────────────────────────────
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false

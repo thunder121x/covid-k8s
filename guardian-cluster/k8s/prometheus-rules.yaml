@@ -1,0 +1,92 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: guardian-rules
+  namespace: guardian
+  labels:
+    # kube-prometheus-stack picks up rules with this label
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: guardian.availability
+      interval: 15s
+      rules:
+        - alert: PodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total{namespace="guardian"}[5m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} is crash-looping"
+            description: >
+              {{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }}
+              has restarted {{ printf "%.2f" $value }} times/s over the last 5 minutes.
+
+        - alert: ReplicaCountDrop
+          expr: kube_deployment_status_replicas_unavailable{namespace="guardian"} > 0
+          for: 30s
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.deployment }} has unavailable replicas"
+            description: >
+              Deployment {{ $labels.namespace }}/{{ $labels.deployment }}
+              has {{ $value }} unavailable replica(s).
+
+    - name: guardian.resources
+      interval: 30s
+      rules:
+        - alert: HighMemoryUsage
+          expr: >
+            container_memory_usage_bytes{namespace="guardian", container!=""}
+            / container_spec_memory_limit_bytes{namespace="guardian", container!=""}
+            > 0.8
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory in {{ $labels.container }}"
+            description: >
+              {{ $labels.pod }}/{{ $labels.container }} is at
+              {{ $value | humanizePercentage }} of its memory limit.
+
+        - alert: HighCPUUsage
+          expr: >
+            rate(container_cpu_usage_seconds_total{namespace="guardian", container!=""}[5m])
+            > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU in {{ $labels.container }}"
+            description: >
+              {{ $labels.pod }}/{{ $labels.container }} CPU usage is
+              {{ $value | humanize }} cores.
+
+    - name: guardian.aqi
+      interval: 30s
+      rules:
+        - alert: APIErrorRate
+          expr: >
+            rate(http_requests_total{namespace="guardian", status=~"5.."}[5m])
+            / rate(http_requests_total{namespace="guardian"}[5m])
+            > 0.01
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High 5xx error rate on {{ $labels.endpoint }}"
+            description: >
+              {{ $labels.endpoint }} error rate is
+              {{ $value | humanizePercentage }} over the last 5 minutes.
+
+        - alert: SensorDataStale
+          expr: time() - aqi_last_ingest_timestamp > 120
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Sensor data is stale (no ingest for >2 min)"
+            description: >
+              Last ingest was {{ $value | humanizeDuration }} ago.
+              Check AQI Ingestor pods and sensor connectivity.
