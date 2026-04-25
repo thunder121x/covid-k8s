@@ -1,0 +1,59 @@
+# /ingest path — higher rate limit (sensor writes)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: guardian-ingest
+  namespace: guardian
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect:        "true"
+    # 50 req/s per source IP on the ingest path
+    nginx.ingress.kubernetes.io/limit-rps:           "50"
+    nginx.ingress.kubernetes.io/limit-connections:   "20"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - guardian.local
+      secretName: guardian-tls
+  rules:
+    - host: guardian.local
+      http:
+        paths:
+          - path: /ingest
+            pathType: Prefix
+            backend:
+              service:
+                name: aqi-ingestor
+                port:
+                  number: 80
+---
+# / path — public dashboard, stricter rate limit
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: guardian-dashboard
+  namespace: guardian
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect:        "true"
+    # 20 req/s per source IP on the dashboard path
+    nginx.ingress.kubernetes.io/limit-rps:           "20"
+    nginx.ingress.kubernetes.io/limit-connections:   "10"
+    # Return 429 instead of 503 on rate-limit breach
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - guardian.local
+      secretName: guardian-tls
+  rules:
+    - host: guardian.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard-api
+                port:
+                  number: 80
