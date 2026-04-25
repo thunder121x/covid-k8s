@@ -1,0 +1,13 @@
+# Secrets — never commit
+.env
+
+# Generated TLS certs (created by setup.sh in /tmp, but guard against local copies)
+*.key
+*.crt
+*.pem
+
+# Helm temporary values with secrets substituted in
+/tmp/guardian-helm-values*.yaml
+
+# macOS
+.DS_Store
