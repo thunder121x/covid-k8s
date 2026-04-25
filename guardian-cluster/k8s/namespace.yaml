@@ -1,0 +1,35 @@
+# Step 1 of every kubectl apply — must be first
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: guardian
+  labels:
+    app.kubernetes.io/part-of: guardian-cluster
+---
+# Non-secret runtime configuration shared by all three services
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: guardian-config
+  namespace: guardian
+data:
+  DB_HOST:    "timescaledb"
+  DB_PORT:    "5432"
+  DB_NAME:    "aqi"
+  DB_USER:    "postgres"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  CACHE_TTL:  "30"
+---
+# TEMPLATE — populate real values before applying.
+# Generate base64: echo -n 'your-value' | base64
+# Or use setup.sh which creates this secret from env vars.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: guardian-secrets
+  namespace: guardian
+type: Opaque
+stringData:
+  db-password:         "${DB_PASSWORD}"
+  discord-webhook-url: "https://discord.com/api/webhooks/${DISCORD_ID}/${DISCORD_TOKEN}/slack"

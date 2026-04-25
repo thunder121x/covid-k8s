@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard-api
+  namespace: guardian
+  labels:
+    app: dashboard-api
+    component: api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: dashboard-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: dashboard-api
+        component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path:   "/metrics"
+        prometheus.io/port:   "8001"
+    spec:
+      containers:
+        - name: dashboard-api
+          image: guardian/dashboard-api:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8001
+              name: http
+          envFrom:
+            - configMapRef:
+                name: guardian-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: guardian-secrets
+                  key: db-password
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard-api
+  namespace: guardian
+  labels:
+    app: dashboard-api
+spec:
+  selector:
+    app: dashboard-api
+  ports:
+    - port: 80
+      targetPort: 8001
+      name: http
