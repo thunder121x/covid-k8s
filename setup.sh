@@ -165,18 +165,26 @@ ${BOLD}╔═══════════════════════�
 ${BOLD}║     Guardian of the Cluster — Ready          ║${NC}
 ${BOLD}╚══════════════════════════════════════════════╝${NC}
 
-1. Add to /etc/hosts ${YELLOW}(run once)${NC}:
-   ${YELLOW}echo \"${MINIKUBE_IP}  guardian.local\" | sudo tee -a /etc/hosts${NC}
+── Needs minikube tunnel ──────────────────────────
+  Run in a separate terminal (keep it running):
+  ${YELLOW}minikube tunnel -p guardian${NC}
 
-2. Start ingress tunnel ${YELLOW}(separate terminal, keep running)${NC}:
-   ${YELLOW}minikube tunnel -p guardian${NC}
+  Add to /etc/hosts ${YELLOW}(run once)${NC}:
+  ${YELLOW}echo \"${MINIKUBE_IP}  guardian.local\" | sudo tee -a /etc/hosts${NC}
 
-Endpoints:
-   ${GREEN}Dashboard API${NC}  https://guardian.local/aqi
-   ${GREEN}Ingest (POST)${NC}  https://guardian.local/ingest
+  ${GREEN}Dashboard API${NC}  https://guardian.local/aqi
+  ${GREEN}Ingest (POST)${NC}  https://guardian.local/ingest
 
-Chaos test:
-   ${YELLOW}bash chaos/rto-test.sh${NC}
+── No tunnel needed (port-forward) ───────────────
+  ${YELLOW}kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring${NC}
+  ${GREEN}Grafana${NC}        http://localhost:3000
+             admin / guardian-admin
+
+  ${YELLOW}kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring${NC}
+  ${GREEN}Prometheus${NC}     http://localhost:9090
+
+── Chaos test ─────────────────────────────────────
+  ${YELLOW}bash chaos/rto-test.sh${NC}
 "
 
 ok "Setup complete"
