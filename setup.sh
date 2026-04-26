@@ -88,7 +88,7 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update
 
 # Inject Discord webhook URL into values before installing
-HELM_VALUES_TMP=$(mktemp /tmp/guardian-helm-values.XXXXXX.yaml)
+HELM_VALUES_TMP="/tmp/guardian-helm-values-$$.yaml"
 sed "s|REPLACE_WITH_DISCORD_WEBHOOK_URL|${DISCORD_WEBHOOK_URL}|g" \
   "$HELM_DIR/values-prometheus.yaml" > "$HELM_VALUES_TMP"
 
