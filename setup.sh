@@ -159,27 +159,34 @@ ok "All application pods ready"
 step "7 — Access information"
 MINIKUBE_IP=$(minikube ip -p "$CLUSTER_NAME")
 
+# minikube service --url blocks on Docker driver multi-node — print instructions instead
 cat <<EOF
 
 ${BOLD}╔══════════════════════════════════════════════╗${NC}
 ${BOLD}║     Guardian of the Cluster — Ready          ║${NC}
 ${BOLD}╚══════════════════════════════════════════════╝${NC}
 
-Add to /etc/hosts:
-  ${YELLOW}${MINIKUBE_IP}  guardian.local${NC}
+1. Add to /etc/hosts (run once):
+   ${YELLOW}echo "${MINIKUBE_IP}  guardian.local" | sudo tee -a /etc/hosts${NC}
 
-Endpoints:
-  Dashboard API : https://guardian.local/aqi
-  Ingest        : https://guardian.local/ingest  (POST)
-  Grafana       : $(minikube -p "$CLUSTER_NAME" service kube-prometheus-stack-grafana -n monitoring --url 2>/dev/null || echo "kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring")
-  Prometheus    : $(minikube -p "$CLUSTER_NAME" service kube-prometheus-stack-prometheus -n monitoring --url 2>/dev/null || echo "kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring")
+2. Start the ingress tunnel (keep this running in a separate terminal):
+   ${YELLOW}minikube tunnel -p guardian${NC}
 
-Grafana credentials:
-  User     : admin
-  Password : guardian-admin
+Endpoints (after tunnel is running):
+   Dashboard API  : https://guardian.local/aqi
+   Ingest (POST)  : https://guardian.local/ingest
+
+3. Open Grafana (port-forward in a separate terminal):
+   ${YELLOW}kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring${NC}
+   Then open: http://localhost:3000
+   User: admin  |  Password: guardian-admin
+
+4. Open Prometheus:
+   ${YELLOW}kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring${NC}
+   Then open: http://localhost:9090
 
 Chaos test:
-  bash chaos/rto-test.sh
+   ${YELLOW}bash chaos/rto-test.sh${NC}
 
 EOF
 
