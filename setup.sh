@@ -12,11 +12,11 @@ K8S_DIR="$(cd "$(dirname "$0")/k8s" && pwd)"
 HELM_DIR="$(cd "$(dirname "$0")/helm" && pwd)"
 DOCKER_DIR="$(cd "$(dirname "$0")/docker" && pwd)"
 
-BOLD='\033[1m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+BOLD=$'\033[1m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+CYAN=$'\033[0;36m'
+NC=$'\033[0m'
 
 step() { echo -e "\n${BOLD}${CYAN}▶ $1${NC}"; }
 ok()   { echo -e "${GREEN}  ✓ $1${NC}"; }
@@ -160,34 +160,23 @@ step "7 — Access information"
 MINIKUBE_IP=$(minikube ip -p "$CLUSTER_NAME")
 
 # minikube service --url blocks on Docker driver multi-node — print instructions instead
-cat <<EOF
-
+echo -e "
 ${BOLD}╔══════════════════════════════════════════════╗${NC}
 ${BOLD}║     Guardian of the Cluster — Ready          ║${NC}
 ${BOLD}╚══════════════════════════════════════════════╝${NC}
 
-1. Add to /etc/hosts (run once):
-   ${YELLOW}echo "${MINIKUBE_IP}  guardian.local" | sudo tee -a /etc/hosts${NC}
+1. Add to /etc/hosts ${YELLOW}(run once)${NC}:
+   ${YELLOW}echo \"${MINIKUBE_IP}  guardian.local\" | sudo tee -a /etc/hosts${NC}
 
-2. Start the ingress tunnel (keep this running in a separate terminal):
+2. Start ingress tunnel ${YELLOW}(separate terminal, keep running)${NC}:
    ${YELLOW}minikube tunnel -p guardian${NC}
 
-Endpoints (after tunnel is running):
-   Dashboard API  : https://guardian.local/aqi
-   Ingest (POST)  : https://guardian.local/ingest
-
-3. Open Grafana (port-forward in a separate terminal):
-   ${YELLOW}kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring${NC}
-   Then open: http://localhost:3000
-   User: admin  |  Password: guardian-admin
-
-4. Open Prometheus:
-   ${YELLOW}kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring${NC}
-   Then open: http://localhost:9090
+Endpoints:
+   ${GREEN}Dashboard API${NC}  https://guardian.local/aqi
+   ${GREEN}Ingest (POST)${NC}  https://guardian.local/ingest
 
 Chaos test:
    ${YELLOW}bash chaos/rto-test.sh${NC}
-
-EOF
+"
 
 ok "Setup complete"

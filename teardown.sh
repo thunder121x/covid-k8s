@@ -8,12 +8,12 @@ CLUSTER_NAME="guardian"
 HARD=false
 [[ "${1:-}" == "--hard" ]] && HARD=true
 
-BOLD='\033[1m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+BOLD=$'\033[1m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+RED=$'\033[0;31m'
+CYAN=$'\033[0;36m'
+NC=$'\033[0m'
 
 step() { echo -e "\n${BOLD}${CYAN}▶ $1${NC}"; }
 ok()   { echo -e "${GREEN}  ✓ $1${NC}"; }
