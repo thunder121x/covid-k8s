@@ -43,6 +43,11 @@ spec:
                 secretKeyRef:
                   name: guardian-secrets
                   key: db-password
+            - name: WAQI_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: guardian-secrets
+                  key: waqi-token
           resources:
             requests:
               memory: "128Mi"

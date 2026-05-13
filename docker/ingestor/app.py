@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="AQI Ingestor", version="1.0.0")
 
 BANGKOK_STATIONS = [
-    {"station_id": "@7397",  "district": "Chatuchak"},
-    {"station_id": "@7398",  "district": "Din Daeng"},
-    {"station_id": "@7399",  "district": "Pathum Wan"},
-    {"station_id": "@9279",  "district": "Bang Na"},
-    {"station_id": "@10082", "district": "Bangkok"},
+    {"station_id": "@1862", "district": "Chatuchak"},
+    {"station_id": "@1861", "district": "Din Daeng"},
+    {"station_id": "@1857", "district": "Pathum Wan"},
+    {"station_id": "@1834", "district": "Bang Na"},
+    {"station_id": "@5773", "district": "Bangkok"},
 ]
 
 WAQI_TOKEN = os.getenv("WAQI_TOKEN", "")
@@ -44,6 +44,34 @@ aqi_last_ingest_timestamp = Gauge(
 
 db_pool: asyncpg.Pool | None = None
 db_healthy: bool = False
+
+
+async def create_db_pool() -> asyncpg.Pool:
+    retries = int(os.getenv("DB_CONNECT_RETRIES", "30"))
+    delay = float(os.getenv("DB_CONNECT_DELAY_SECONDS", "2"))
+    last_exc: Exception | None = None
+
+    for attempt in range(1, retries + 1):
+        try:
+            return await asyncpg.create_pool(
+                host=os.getenv("DB_HOST", "timescaledb"),
+                port=int(os.getenv("DB_PORT", "5432")),
+                database=os.getenv("DB_NAME", "aqi"),
+                user=os.getenv("DB_USER", "postgres"),
+                password=os.getenv("DB_PASSWORD"),
+                min_size=2,
+                max_size=10,
+                command_timeout=10,
+            )
+        except Exception as exc:
+            last_exc = exc
+            logger.warning(
+                "DB connection attempt %d/%d failed: %s", attempt, retries, exc
+            )
+            if attempt < retries:
+                await asyncio.sleep(delay)
+
+    raise last_exc or RuntimeError("DB connection failed")
 
 class SensorReading(BaseModel):
     district: str
@@ -131,6 +159,11 @@ async def auto_fetch_loop() -> None:
     while True:
         logger.info("INFO: Auto-fetching Bangkok AQI data")
         try:
+            if db_pool is None:
+                logger.warning("Auto-fetch skipped: database pool is unavailable")
+                await asyncio.sleep(300)
+                continue
+
             async with httpx.AsyncClient() as client:
                 for station in BANGKOK_STATIONS:
                     pm25 = await fetch_station_pm25(client, station["station_id"])
@@ -153,16 +186,7 @@ async def auto_fetch_loop() -> None:
 async def startup() -> None:
     global db_pool, db_healthy
     try:
-        db_pool = await asyncpg.create_pool(
-            host=os.getenv("DB_HOST", "timescaledb"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            database=os.getenv("DB_NAME", "aqi"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD"),
-            min_size=2,
-            max_size=10,
-            command_timeout=10,
-        )
+        db_pool = await create_db_pool()
         await init_schema(db_pool)
         db_healthy = True
         # logger.info("INFO: Database pool ready")
