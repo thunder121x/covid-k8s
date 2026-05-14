@@ -181,7 +181,6 @@ async def shutdown() -> None:
 
 @app.post("/ingest", status_code=201)
 async def ingest(reading: SensorReading):
-    """Endpoint manuel existant — inchangé."""
     if not db_healthy or db_pool is None:
         ingest_requests_total.labels(status="error").inc()
         raise HTTPException(status_code=503, detail="Database unavailable")
