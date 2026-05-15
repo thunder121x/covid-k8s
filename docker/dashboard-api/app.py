@@ -1,4 +1,5 @@
 import json
+import asyncio
 import logging
 import os
 import time
@@ -40,20 +41,39 @@ db_healthy: bool = False
 redis_healthy: bool = False
 
 
+async def create_db_pool() -> asyncpg.Pool:
+    retries = int(os.getenv("DB_CONNECT_RETRIES", "30"))
+    delay = float(os.getenv("DB_CONNECT_DELAY_SECONDS", "2"))
+    last_exc: Exception | None = None
+
+    for attempt in range(1, retries + 1):
+        try:
+            return await asyncpg.create_pool(
+                host=os.getenv("DB_HOST", "timescaledb"),
+                port=int(os.getenv("DB_PORT", "5432")),
+                database=os.getenv("DB_NAME", "aqi"),
+                user=os.getenv("DB_USER", "postgres"),
+                password=os.getenv("DB_PASSWORD"),
+                min_size=2,
+                max_size=10,
+                command_timeout=10,
+            )
+        except Exception as exc:
+            last_exc = exc
+            logger.warning(
+                "DB connection attempt %d/%d failed: %s", attempt, retries, exc
+            )
+            if attempt < retries:
+                await asyncio.sleep(delay)
+
+    raise last_exc or RuntimeError("DB connection failed")
+
+
 @app.on_event("startup")
 async def startup() -> None:
     global db_pool, redis_client, db_healthy, redis_healthy
     try:
-        db_pool = await asyncpg.create_pool(
-            host=os.getenv("DB_HOST", "timescaledb"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            database=os.getenv("DB_NAME", "aqi"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD"),
-            min_size=2,
-            max_size=10,
-            command_timeout=10,
-        )
+        db_pool = await create_db_pool()
         db_healthy = True
         logger.info("DB pool ready")
     except Exception as exc:

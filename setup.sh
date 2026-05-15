@@ -5,9 +5,9 @@
 set -euo pipefail
 
 CLUSTER_NAME="guardian"
-NODES=3
-CPUS=4
-MEMORY_MB=8192
+NODES=1
+CPUS=2
+MEMORY_MB=3072
 K8S_DIR="$(cd "$(dirname "$0")/k8s" && pwd)"
 HELM_DIR="$(cd "$(dirname "$0")/helm" && pwd)"
 DOCKER_DIR="$(cd "$(dirname "$0")/docker" && pwd)"

@@ -7,7 +7,8 @@ RUN pip install --no-cache-dir \
     uvicorn[standard]==0.27.1 \
     asyncpg==0.29.0 \
     prometheus-client==0.20.0 \
-    pydantic==2.6.1
+    pydantic==2.6.1 \
+    httpx==0.27.0
 
 COPY app.py .
 

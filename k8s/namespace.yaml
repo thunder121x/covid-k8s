@@ -32,4 +32,5 @@ metadata:
 type: Opaque
 stringData:
   db-password:         "${DB_PASSWORD}"
+  waqi-token:          "${WAQI_TOKEN}"
   discord-webhook-url: "https://discord.com/api/webhooks/${DISCORD_ID}/${DISCORD_TOKEN}/slack"
