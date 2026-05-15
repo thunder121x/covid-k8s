@@ -8,9 +8,7 @@ grafana:
   adminPassword: "guardian-admin"   # change before real use
 
   persistence:
-    enabled: true
-    storageClassName: standard
-    size: 5Gi
+    enabled: false
 
   # Sidecar loads all ConfigMaps labelled grafana_dashboard=1 as dashboards
   sidecar:
@@ -156,15 +154,6 @@ prometheus:
     retention: 30d
     retentionSize: "18GB"
 
-    storageSpec:
-      volumeClaimTemplate:
-        spec:
-          storageClassName: standard
-          accessModes: ["ReadWriteOnce"]
-          resources:
-            requests:
-              storage: 20Gi
-
     # Allow PrometheusRule / ServiceMonitor resources from any namespace
     ruleSelectorNilUsesHelmValues:          false
     serviceMonitorSelectorNilUsesHelmValues: false
@@ -196,16 +185,6 @@ prometheus:
 
 # ── Alertmanager ──────────────────────────────────────────────────────────────
 alertmanager:
-  alertmanagerSpec:
-    storage:
-      volumeClaimTemplate:
-        spec:
-          storageClassName: standard
-          accessModes: ["ReadWriteOnce"]
-          resources:
-            requests:
-              storage: 2Gi
-
   config:
     global:
       resolve_timeout: 5m

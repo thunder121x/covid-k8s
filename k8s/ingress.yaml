@@ -54,6 +54,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: dashboard-api
+                name: frontend
                 port:
                   number: 80

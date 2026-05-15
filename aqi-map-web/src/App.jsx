@@ -191,27 +191,32 @@ function App() {
       if (Array.isArray(data) && data.length > 0) {
         setReadings(data);
         setStatus("live");
+        return true;
       } else {
         setReadings(SAMPLE_DATA);
         setStatus("empty");
+        return true;
       }
     } catch (nextError) {
       setReadings(SAMPLE_DATA);
       setStatus("offline");
       setError(nextError?.message || "Cannot connect to API");
+      return false;
     } finally {
       setLastSync(new Date().toISOString());
     }
   }
 
   useEffect(() => {
-    const initialLoad = window.setTimeout(loadData, 0);
+    let timer;
 
-    const timer = window.setInterval(loadData, REFRESH_INTERVAL_MS);
-    return () => {
-      window.clearTimeout(initialLoad);
-      window.clearInterval(timer);
-    };
+    async function loadAndSchedule() {
+      const ok = await loadData();
+      timer = window.setTimeout(loadAndSchedule, ok ? REFRESH_INTERVAL_MS : 5000);
+    }
+
+    timer = window.setTimeout(loadAndSchedule, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const mapData = useMemo(() => {

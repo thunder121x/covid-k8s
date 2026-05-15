@@ -39,6 +39,7 @@ fi
 : "${DB_PASSWORD:?DB_PASSWORD is not set. Add it to .env or export it.}"
 : "${DISCORD_ID:?DISCORD_ID is not set. Add it to .env or export it.}"
 : "${DISCORD_TOKEN:?DISCORD_TOKEN is not set. Add it to .env or export it.}"
+: "${WAQI_TOKEN:?WAQI_TOKEN is not set. Add it to .env or export it.}"
 
 # Construct the full Discord webhook URL from split parts (matches namespace.yaml)
 DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/${DISCORD_ID}/${DISCORD_TOKEN}"
@@ -71,12 +72,20 @@ ok "ingress + metrics-server enabled"
 # docker-env is incompatible with multi-node clusters; minikube image load
 # distributes the image to all nodes so imagePullPolicy: Never keeps working.
 step "3 — Building and loading Docker images"
+FRONTEND_DIR="$(cd "$(dirname "$0")/aqi-map-web" && pwd)"
+
+info "Building React frontend …"
+npm --prefix "$FRONTEND_DIR" ci
+npm --prefix "$FRONTEND_DIR" run build
+
+docker build -t guardian/frontend:latest        "$FRONTEND_DIR"
 docker build -t guardian/aqi-ingestor:latest    "$DOCKER_DIR/ingestor"
 docker build -t guardian/dashboard-api:latest   "$DOCKER_DIR/dashboard-api"
 docker build -t guardian/data-aggregator:latest "$DOCKER_DIR/aggregator"
 ok "Images built"
 
 info "Loading images into all $NODES minikube nodes (this takes ~1 min) …"
+minikube image load guardian/frontend:latest        -p "$CLUSTER_NAME"
 minikube image load guardian/aqi-ingestor:latest    -p "$CLUSTER_NAME"
 minikube image load guardian/dashboard-api:latest   -p "$CLUSTER_NAME"
 minikube image load guardian/data-aggregator:latest -p "$CLUSTER_NAME"
@@ -118,6 +127,7 @@ kubectl rollout status deployment/redis -n guardian --timeout=60s
 ok "Storage layer ready"
 
 # 5c. Application deployments
+kubectl apply -f "$K8S_DIR/frontend-deployment.yaml"
 kubectl apply -f "$K8S_DIR/ingestor-deployment.yaml"
 kubectl apply -f "$K8S_DIR/dashboard-deployment.yaml"
 kubectl apply -f "$K8S_DIR/aggregator-deployment.yaml"
@@ -150,6 +160,7 @@ ok "PrometheusRule applied"
 
 # ─── 6. Wait for all pods to be ready ────────────────────────────────────────
 step "6 — Waiting for all pods in guardian namespace"
+kubectl rollout status deployment/frontend        -n guardian --timeout=60s
 kubectl rollout status deployment/aqi-ingestor   -n guardian --timeout=120s
 kubectl rollout status deployment/dashboard-api  -n guardian --timeout=120s
 kubectl rollout status deployment/data-aggregator -n guardian --timeout=120s
@@ -172,7 +183,8 @@ ${BOLD}╚═══════════════════════�
   Add to /etc/hosts ${YELLOW}(run once)${NC}:
   ${YELLOW}echo \"${MINIKUBE_IP}  guardian.local\" | sudo tee -a /etc/hosts${NC}
 
-  ${GREEN}Dashboard API${NC}  https://guardian.local/aqi
+  ${GREEN}React Map${NC}      https://guardian.local/
+  ${GREEN}Dashboard API${NC}  https://guardian.local/api/aqi
   ${GREEN}Ingest (POST)${NC}  https://guardian.local/ingest
 
 ── No tunnel needed (port-forward) ───────────────

@@ -37,3 +37,14 @@ spec:
         - type: Pods
           value: 1
           periodSeconds: 120
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: dashboard-api-pdb
+  namespace: guardian
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: dashboard-api
